@@ -1,9 +1,9 @@
-*.geojson
 *.qmd
 *.qgz
 /resource
 /geojson-to-3dtiles
 /create-data
+/oldData
 .DS_Store
 *.fmw
 *.fmw.*
