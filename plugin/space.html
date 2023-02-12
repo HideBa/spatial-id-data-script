@@ -11,6 +11,8 @@
 
   .show {
     display: flex;
+    overflow: scroll;
+    max-height: 600px;
     flex-direction: column;
     justify-content: center;
     align-items: center;
@@ -144,10 +146,15 @@
 
   table {
     width: 100%;
+    max-height: 400px;
+    display: block;
+    overflow: scroll;
     border-collapse: collapse;
   }
 
   .element {
+    overflow: scroll;
+    max-height: 500px;
     width: 100%;
   }
 
@@ -1063,8 +1070,11 @@
           </svg>
           csvデータを追加する</label>
       </div>
-      <div class="trigger-example">triggger!!!!</div>
+      <div id="example-trigger">Trigger</div>
       <div class="show" id="show"></div>
+      <button type="button" class="blue-btn" id="export-csv-btn">
+        空間ID対応CSVをエクスポート
+      </button>
     </div>
     <div class="display" id="display-2">
       <!-- show 3d tiles input alike -->
@@ -1157,36 +1167,55 @@
 <script src="https://code.jquery.com/jquery-1.6.4.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <script src="https://geolonia.github.io/spatial-id-request-sdk/spatial-id-request.js"></script>
-<script src="https://storage.googleapis.com/spatial-id/scripts/umd/csv.js"></script>
+<script src="https://storage.googleapis.com/spatial-id/scripts/csv-parse/umd/index.js"></script>
+<script src="https://storage.googleapis.com/spatial-id/scripts/csv-stringify/umd/sync.js"></script>
 <script>
   console.clear();
 
+  let currentLayer
+  let currentFeature
+  let plateauFetching = false
+  let fudosanFetching = false
   let spaceUrl
   window.addEventListener("message", function (e) {
     if (e.source !== parent) return;
 
-    let allLayers = e.source.reearth.layers
-    let tags;
+    // let allLayers = e.source.reearth.layers
+    // let tags;
 
     if (e.data.property) {
       property = e.data.property;
       spaceUrl = property?.default?.spaceUrl
     }
 
-    if (e.data.type === 'mousedata') {
+    if (e.data.type === "select") {
       const list = document.getElementById("show")
       while (list.firstChild) {
         list.removeChild(list.firstChild);
       }
-      tags = allLayers?.selected?.tags;
-      handleShowTag(tags)
-      const { lat, lng, height: alt } = e.data.payload
-      console.log("lat, lng, height===", lat, lng, alt);
-      const space = getSpatialIdByLatLngAlt(lat, lng, 0); //pass alt later
-      console.log("space----", space);
-      showVoxelPropertiesOnInfobox(space)
+      const feature = e.data.feature
+      if (!feature) return
+      const cloned = cloneLayer(e.data.layer)
+      currentLayer = cloned
+      currentFeature = e.data.feature
+
+      const space = new SpatialIdRequest.Space(feature.properties.id)
+
+      showVoxelProperties(currentFeature) //show csv data
+
+      plateauFetching = true
+      getPlateauData(space).then(d => {
+        if (!d.length || plateauFetching) return
+        showData([["PLATEAU", d]])
+      }).finally(() => { plateauFetching = false })
+
+      fudosanFetching = true
+      getFudosanData(space).then(d => {
+        if (!d.length || fudosanFetching) return
+        showData([["不動産情報", d]])
+      }).finally(() => { fudosanFetching = false })
     }
-    main()
+    // main()
 
   });
 
@@ -1312,47 +1341,47 @@
     }
   }
 
-  function handleShowTag(tags) {
-    const list = document.getElementById("show")
-    const el = document.createElement("div");
-    el.className = "element";
+  // function handleShowTag(tags) {
+  //   const list = document.getElementById("show")
+  //   const el = document.createElement("div");
+  //   el.className = "element";
 
-    let btn = document.createElement("button");
-    btn.className = "accordion";
-    el.appendChild(btn);
+  //   let btn = document.createElement("button");
+  //   btn.className = "accordion";
+  //   el.appendChild(btn);
 
-    let spanBtn = document.createElement("span");
-    spanBtn.className = "accordion-title";
-    if (tags && tags.length > 0) {
-      spanBtn.innerHTML = "list tags selected (" + tags.length + ")";
-    } else {
-      spanBtn.innerHTML = "selected has no tags"
-    }
+  //   let spanBtn = document.createElement("span");
+  //   spanBtn.className = "accordion-title";
+  //   if (tags && tags.length > 0) {
+  //     spanBtn.innerHTML = "list tags selected (" + tags.length + ")";
+  //   } else {
+  //     spanBtn.innerHTML = "selected has no tags"
+  //   }
 
-    let spanIcon = document.createElement("span");
-    spanIcon.className = "icon";
-    spanIcon.setAttribute("aria-hidden", "true");
-    btn.appendChild(spanBtn);
-    btn.appendChild(spanIcon);
+  //   let spanIcon = document.createElement("span");
+  //   spanIcon.className = "icon";
+  //   spanIcon.setAttribute("aria-hidden", "true");
+  //   btn.appendChild(spanBtn);
+  //   btn.appendChild(spanIcon);
 
-    let panel = document.createElement("div");
-    panel.className = "panel";
-    let table = document.createElement("table");
-    tags?.forEach(tag => {
-      let row = document.createElement("tr");
-      let col1 = document.createElement("td");
-      col1.innerHTML = tag.id;
-      let col2 = document.createElement("td");
-      col2.innerHTML = tag.label;
-      table.appendChild(row);
-      table.appendChild(col1);
-      table.appendChild(col2);
-      panel.appendChild(table);
-    })
+  //   let panel = document.createElement("div");
+  //   panel.className = "panel";
+  //   let table = document.createElement("table");
+  //   tags?.forEach(tag => {
+  //     let row = document.createElement("tr");
+  //     let col1 = document.createElement("td");
+  //     col1.innerHTML = tag.id;
+  //     let col2 = document.createElement("td");
+  //     col2.innerHTML = tag.label;
+  //     table.appendChild(row);
+  //     table.appendChild(col1);
+  //     table.appendChild(col2);
+  //     panel.appendChild(table);
+  //   })
 
-    el.appendChild(panel)
-    list.appendChild(el);
-  }
+  //   el.appendChild(panel)
+  //   list.appendChild(el);
+  // }
   const tabButtons = document.querySelectorAll('.tab-button');
   const displays = document.querySelectorAll('.display');
 
@@ -1414,7 +1443,7 @@
     return convertedRecords
   }
 
-  const spatialIdnize = (obj) => {
+  function spatialIdnize(obj) {
     if (!obj.hasOwnProperty("lat") || !obj.hasOwnProperty("lng")) return
     const { lat, lng, alt, ...rest } = obj
     const space = getSpatialIdByLatLngAlt(lat, lng, alt ?? 0)
@@ -1424,11 +1453,11 @@
     }
   }
 
-  const spatialIdnizeList = (objects) => {
+  function spatialIdnizeList(objects) {
     return objects.map(o => spatialIdnize(o))
   }
 
-  const processCSV = (csvStr, callback) => {
+  function processCSV(csvStr, callback) {
     let records
     csv_parse.parse(csvStr, {
       comment: "#",
@@ -1453,7 +1482,6 @@
     reader.onload = function (e) {
       const text = e.target.result;
       processCSV(text, (res) => {
-        // records.push(res)
         records[fileName] = res
       })
       // The document.write method will overwrite the entire document, including the closing </body> and </html> tags, causing all elements on the page to be removed.
@@ -1463,35 +1491,56 @@
     reader.readAsText(input);
   });
 
-  function getPropertyBySpatialId(records, id) {
-    const keys = Object.keys(records)
-    let newRecords = {}
-    keys.forEach(k => {
-      const filteredProps = records[k].filter(d => {
-        return d.id === id
-      })
-      newRecords[k] = filteredProps
-    })
-    console.log("new ------", newRecords);
-    return newRecords
-  }
-  // lat, lng, alt -> Space
-  function getSpatialIdByLatLngAlt(lat, lng, alt) {
-    return new SpatialIdRequest.Space({ lng: lng, lat: lat, alt: alt }, 16)
+  // function getPropertyBySpatialId(records, id) {
+  //   const keys = Object.keys(records)
+  //   let newRecords = {}
+  //   keys.forEach(k => {
+  //     const filteredProps = records[k].filter(d => {
+  //       return d.id === id
+  //     })
+  //     newRecords[k] = filteredProps
+  //   })
+  //   return newRecords
+  // }
+  // // lat, lng, alt -> Space
+  // function getSpatialIdByLatLngAlt(lat, lng, alt) {
+  //   return new SpatialIdRequest.Space({ lng: lng, lat: lat, alt: alt }, 16)
+  // }
+
+  // function showVoxelPropertiesOnInfobox(space) {
+  //   const spaceProperties = getPropertyBySpatialId(records, space.id)
+  //   const propertiesEntries = Object.entries(spaceProperties)
+  //   showData(propertiesEntries)
+  // }
+
+  function showVoxelProperties(feature) {
+    if (!feature) return
+    const properties = feature.properties
+    showData([["Voxelのメタ情報", [properties]]])
   }
 
-  function showVoxelPropertiesOnInfobox(space) {
-    const spaceProperties = getPropertyBySpatialId(records, space.id)
-    const propertiesEntries = Object.entries(spaceProperties)
-    showData(propertiesEntries)
+  function highlightSelectedVoxel(space) {
+
   }
 
-  $(".trigger-example").click(() => {
-    const space = getSpatialIdByLatLngAlt(35.638907595243566, 139.7472621100799, 0)
-    const spaceProperties = getPropertyBySpatialId(records, space.id)
-    const propertiesEntries = Object.entries(spaceProperties)
-    showData(propertiesEntries)
-  })
+  function replaceLayer(layer) { //pass new layer
+    parent.postMessage({ type: "layer.replace", layer }, "*");
+  }
+
+  // space -> [{...props}]
+  async function getPlateauData(space) {
+    const res = await SpatialIdRequest.queryVectorTile(
+      { "url": "https://tileserver.dejicho-chosa.geolonia-dev.click/services/plateau_minato_ku?key=YOUR-API-KEY" }, space).catch(e => console.error(e));
+    const records = res.features.map(f => f.properties)
+    return records
+  }
+
+  async function getFudosanData(space) {
+    const res = await SpatialIdRequest.queryVectorTile(
+      { "url": "https://tileserver.dejicho-chosa.geolonia-dev.click/services/fudosan_data?key=YOUR-API-KEY" }, space).catch(e => console.error(e));
+    const records = res.features.map(f => f.properties)
+    return records
+  }
 
   // <!-- This function is used to update the iframe size. -->
   let expanded = false;
@@ -1499,7 +1548,7 @@
   function updateIframeSize() {
     let newWrapperElm = document.getElementById("wrapper");
     let heightWp = newWrapperElm.offsetHeight;
-    parent.postMessage({ type: "resize", expanded, heightWp }, "*");
+    parent.postMessage({ type: "resize", expanded: true, heightWp }, "*");
   }
 
   // Handle to get color hex from color picker
@@ -1642,6 +1691,44 @@
     const styleData = handleDataJson(data)
     downloadObjectAsJson(styleData, "download");
   });
+
+  const trggerBtn = document.getElementById("example-trigger")
+  trggerBtn.addEventListener("click", function (e) {
+    e.preventDefault()
+    replaceLayer(currentLayer)
+  })
+
+
+  function csvStrToBlob(csvStr) {
+    return new Blob([csvStr], { type: "text/csv" })
+  }
+
+  function downloadCSV() {
+    const [filename, csvStr] = recordsToCSV()
+    const blob = csvStrToBlob(csvStr)
+    const url = (window.URL || window.webkitURL).createObjectURL(blob)
+    const download = document.createElement("a")
+    download.href = url
+    download.download = filename
+    download.click()
+      (window.URL || window.webkitURL).revokeObjectURL(url)
+  }
+
+  function recordsToCSV() {
+    const fileNames = Object.keys(records)
+    if (!fileNames.length) return
+    return [fileNames[0], objectToCSV(records[fileNames[0]])] //今は最初の要素だけダウンロード。ファイル名とファイル本体をリストで返却
+  }
+
+  function objectToCSV(obj) {
+    return csv_stringify_sync.stringify(obj, { header: true })
+  }
+
+  const csvExportBtn = document.getElementById("export-csv-btn");
+  csvExportBtn.addEventListener("click", function (e) {
+    e.preventDefault();
+    downloadCSV()
+  })
 
   displayColorHex();
   displayColorFromHex()

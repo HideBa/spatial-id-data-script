@@ -1,6 +1,6 @@
 reearth.ui.show(
-`
-<style>
+  `
+  <style>
   html {
     overflow: hidden;
   }
@@ -13,6 +13,8 @@ reearth.ui.show(
 
   .show {
     display: flex;
+    overflow: scroll;
+    max-height: 600px;
     flex-direction: column;
     justify-content: center;
     align-items: center;
@@ -146,10 +148,15 @@ reearth.ui.show(
 
   table {
     width: 100%;
+    max-height: 400px;
+    display: block;
+    overflow: scroll;
     border-collapse: collapse;
   }
 
   .element {
+    overflow: scroll;
+    max-height: 500px;
     width: 100%;
   }
 
@@ -1065,7 +1072,11 @@ reearth.ui.show(
           </svg>
           csvデータを追加する</label>
       </div>
+      <div id="example-trigger">Trigger</div>
       <div class="show" id="show"></div>
+      <button type="button" class="blue-btn" id="export-csv-btn">
+        空間ID対応CSVをエクスポート
+      </button>
     </div>
     <div class="display" id="display-2">
       <!-- show 3d tiles input alike -->
@@ -1157,30 +1168,56 @@ reearth.ui.show(
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="https://code.jquery.com/jquery-1.6.4.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://geolonia.github.io/spatial-id-request-sdk/spatial-id-request.js"></script>
+<script src="https://storage.googleapis.com/spatial-id/scripts/csv-parse/umd/index.js"></script>
+<script src="https://storage.googleapis.com/spatial-id/scripts/csv-stringify/umd/sync.js"></script>
 <script>
   console.clear();
 
+  let currentLayer
+  let currentFeature
+  let plateauFetching = false
+  let fudosanFetching = false
   let spaceUrl
   window.addEventListener("message", function (e) {
     if (e.source !== parent) return;
 
-    let allLayers = e.source.reearth.layers
-    let tags;
+    // let allLayers = e.source.reearth.layers
+    // let tags;
 
     if (e.data.property) {
       property = e.data.property;
       spaceUrl = property?.default?.spaceUrl
     }
 
-    if (e.data.type === 'mousedata') {
+    if (e.data.type === "select") {
       const list = document.getElementById("show")
       while (list.firstChild) {
         list.removeChild(list.firstChild);
       }
-      tags = allLayers?.selected?.tags;
-      handleShowTag(tags)
+      const feature = e.data.feature
+      if (!feature) return
+      // const cloned = cloneLayer(e.data.layer)
+      currentLayer = e.data.layer
+      currentFeature = e.data.feature
+
+      const space = new SpatialIdRequest.Space(feature.properties.id)
+
+      showVoxelPropertiesOnInfobox(space) //show csv data
+
+      plateauFetching = true
+      getPlateauData(space).then(d => {
+        if (!d.length || plateauFetching) return
+        showData([["PLATEAU", d]])
+      }).finally(() => { plateauFetching = false })
+
+      fudosanFetching = true
+      getFudosanData(space).then(d => {
+        if (!d.length || fudosanFetching) return
+        showData([["不動産情報", d]])
+      }).finally(() => { fudosanFetching = false })
     }
-    main()
+    // main()
 
   });
 
@@ -1306,47 +1343,47 @@ reearth.ui.show(
     }
   }
 
-  function handleShowTag(tags) {
-    const list = document.getElementById("show")
-    const el = document.createElement("div");
-    el.className = "element";
+  // function handleShowTag(tags) {
+  //   const list = document.getElementById("show")
+  //   const el = document.createElement("div");
+  //   el.className = "element";
 
-    let btn = document.createElement("button");
-    btn.className = "accordion";
-    el.appendChild(btn);
+  //   let btn = document.createElement("button");
+  //   btn.className = "accordion";
+  //   el.appendChild(btn);
 
-    let spanBtn = document.createElement("span");
-    spanBtn.className = "accordion-title";
-    if (tags && tags.length > 0) {
-      spanBtn.innerHTML = "list tags selected (" + tags.length + ")";
-    } else {
-      spanBtn.innerHTML = "selected has no tags"
-    }
+  //   let spanBtn = document.createElement("span");
+  //   spanBtn.className = "accordion-title";
+  //   if (tags && tags.length > 0) {
+  //     spanBtn.innerHTML = "list tags selected (" + tags.length + ")";
+  //   } else {
+  //     spanBtn.innerHTML = "selected has no tags"
+  //   }
 
-    let spanIcon = document.createElement("span");
-    spanIcon.className = "icon";
-    spanIcon.setAttribute("aria-hidden", "true");
-    btn.appendChild(spanBtn);
-    btn.appendChild(spanIcon);
+  //   let spanIcon = document.createElement("span");
+  //   spanIcon.className = "icon";
+  //   spanIcon.setAttribute("aria-hidden", "true");
+  //   btn.appendChild(spanBtn);
+  //   btn.appendChild(spanIcon);
 
-    let panel = document.createElement("div");
-    panel.className = "panel";
-    let table = document.createElement("table");
-    tags?.forEach(tag => {
-      let row = document.createElement("tr");
-      let col1 = document.createElement("td");
-      col1.innerHTML = tag.id;
-      let col2 = document.createElement("td");
-      col2.innerHTML = tag.label;
-      table.appendChild(row);
-      table.appendChild(col1);
-      table.appendChild(col2);
-      panel.appendChild(table);
-    })
+  //   let panel = document.createElement("div");
+  //   panel.className = "panel";
+  //   let table = document.createElement("table");
+  //   tags?.forEach(tag => {
+  //     let row = document.createElement("tr");
+  //     let col1 = document.createElement("td");
+  //     col1.innerHTML = tag.id;
+  //     let col2 = document.createElement("td");
+  //     col2.innerHTML = tag.label;
+  //     table.appendChild(row);
+  //     table.appendChild(col1);
+  //     table.appendChild(col2);
+  //     panel.appendChild(table);
+  //   })
 
-    el.appendChild(panel)
-    list.appendChild(el);
-  }
+  //   el.appendChild(panel)
+  //   list.appendChild(el);
+  // }
   const tabButtons = document.querySelectorAll('.tab-button');
   const displays = document.querySelectorAll('.display');
 
@@ -1387,29 +1424,119 @@ reearth.ui.show(
     icon.style.display = 'none';
   });
 
-  const csvBtn = document.getElementById("file-input");
+  // CSVをアップロードしてObject形式に変換する
+  // process CSV
+  const LAT_JA = "緯度"
+  const LNG_JA = "経度"
+  const ALT_JA = "標高"
 
+  const convertLatLng = (records) => {
+    if (!records.length) return
+    const convertedRecords = records.map(r => {
+      const { 緯度, 経度, 標高, ...rest } = r
+      if (!(緯度 && 経度)) return r
+      return {
+        lat: r[LAT_JA],
+        lng: r[LNG_JA],
+        alt: ALT_JA in r && r[ALT_JA],
+        ...rest
+      }
+    })
+    return convertedRecords
+  }
+
+  function spatialIdnize(obj) {
+    if (!obj.hasOwnProperty("lat") || !obj.hasOwnProperty("lng")) return
+    const { lat, lng, alt, ...rest } = obj
+    const space = getSpatialIdByLatLngAlt(lat, lng, alt ?? 0)
+    return {
+      id: space.id,
+      ...rest
+    }
+  }
+
+  function spatialIdnizeList(objects) {
+    return objects.map(o => spatialIdnize(o))
+  }
+
+  function processCSV(csvStr, callback) {
+    let records
+    csv_parse.parse(csvStr, {
+      comment: "#",
+      columns: true,
+      delimiter: ","
+    }, (err, rs) => {
+      if (err) throw new Error("failed to process csv")
+      const convertedRecords = convertLatLng(rs)
+      const spatialIdRecords = spatialIdnizeList(convertedRecords ?? [])
+      records = spatialIdRecords
+      callback?.(records)
+    })
+  }
+
+  let records = {} //複数CSVを見越してrecordsをさらにリストで格納 e.g. {hinansho: []}
+  const csvBtn = document.getElementById("file-input");
   $('input[type=file]').change(function () {
     const input = csvBtn.files[0];
+    const fileName = input.name;
     const reader = new FileReader();
 
     reader.onload = function (e) {
       const text = e.target.result;
-      const array = csvToArray(text);
+      processCSV(text, (res) => {
+        records[fileName] = res
+      })
       // The document.write method will overwrite the entire document, including the closing </body> and </html> tags, causing all elements on the page to be removed.
       // document.write(JSON.stringify(array));
     };
 
     reader.readAsText(input);
-
-    function csvToArray(str, delimiter = ",") {
-      let array = str.split("\\\\r\\\\n").map(function (line) {
-        return line.split(delimiter);
-      });
-
-      console.log("show csv data here", array[0]);
-    }
   });
+
+  function getPropertyBySpatialId(records, id) {
+    const keys = Object.keys(records)
+    let newRecords = {}
+    keys.forEach(k => {
+      const filteredProps = records[k].filter(d => {
+        return d.id === id
+      })
+      newRecords[k] = filteredProps
+    })
+    return newRecords
+  }
+  // lat, lng, alt -> Space
+  function getSpatialIdByLatLngAlt(lat, lng, alt) {
+    return new SpatialIdRequest.Space({ lng: lng, lat: lat, alt: alt }, 16)
+  }
+
+  function showVoxelPropertiesOnInfobox(space) {
+    const spaceProperties = getPropertyBySpatialId(records, space.id)
+    const propertiesEntries = Object.entries(spaceProperties)
+    showData(propertiesEntries)
+  }
+
+  function highlightSelectedVoxel(space) {
+
+  }
+
+  function replaceLayer(layer) { //pass new layer
+    parent.postMessage({ type: "layer.replace", layer }, "*");
+  }
+
+  // space -> [{...props}]
+  async function getPlateauData(space) {
+    const res = await SpatialIdRequest.queryVectorTile(
+      { "url": "https://tileserver.dejicho-chosa.geolonia-dev.click/services/plateau_minato_ku?key=YOUR-API-KEY" }, space).catch(e => console.error(e));
+    const records = res.features.map(f => f.properties)
+    return records
+  }
+
+  async function getFudosanData(space) {
+    const res = await SpatialIdRequest.queryVectorTile(
+      { "url": "https://tileserver.dejicho-chosa.geolonia-dev.click/services/fudosan_data?key=YOUR-API-KEY" }, space).catch(e => console.error(e));
+    const records = res.features.map(f => f.properties)
+    return records
+  }
 
   // <!-- This function is used to update the iframe size. -->
   let expanded = false;
@@ -1417,7 +1544,7 @@ reearth.ui.show(
   function updateIframeSize() {
     let newWrapperElm = document.getElementById("wrapper");
     let heightWp = newWrapperElm.offsetHeight;
-    parent.postMessage({ type: "resize", expanded, heightWp }, "*");
+    parent.postMessage({ type: "resize", expanded: true, heightWp }, "*");
   }
 
   // Handle to get color hex from color picker
@@ -1561,38 +1688,139 @@ reearth.ui.show(
     downloadObjectAsJson(styleData, "download");
   });
 
+  const trggerBtn = document.getElementById("example-trigger")
+  trggerBtn.addEventListener("click", function (e) {
+    e.preventDefault()
+    replaceLayer(currentLayer)
+  })
+
+
+  function csvStrToBlob(csvStr) {
+    return new Blob([csvStr], { type: "text/csv" })
+  }
+
+  function downloadCSV() {
+    const [filename, csvStr] = recordsToCSV()
+    const blob = csvStrToBlob(csvStr)
+    const url = (window.URL || window.webkitURL).createObjectURL(blob)
+    const download = document.createElement("a")
+    download.href = url
+    download.download = filename
+    download.click()
+      (window.URL || window.webkitURL).revokeObjectURL(url)
+  }
+
+  function recordsToCSV() {
+    const fileNames = Object.keys(records)
+    if (!fileNames.length) return
+    return [fileNames[0], objectToCSV(records[fileNames[0]])] //今は最初の要素だけダウンロード。ファイル名とファイル本体をリストで返却
+  }
+
+  function objectToCSV(obj) {
+    return csv_stringify_sync.stringify(obj, { header: true })
+  }
+
+  const csvExportBtn = document.getElementById("export-csv-btn");
+  csvExportBtn.addEventListener("click", function (e) {
+    e.preventDefault();
+    downloadCSV()
+  })
+
   displayColorHex();
   displayColorFromHex()
 </script>
 `,
-{ width: 382, height: 264 }
+  { width: 382, height: 264 }
 );
 
 reearth.on("update", send);
 send();
 
 reearth.on("message", (msg) => {
-if (msg.type === "resize") {
-reearth.ui.resize?.(
-382,
-msg.expanded ? 660 : 264,
-msg.expanded ? undefined : false
-);
-}
+  // resize
+  if (msg.type === "resize") {
+    reearth.ui.resize?.(
+      382,
+      msg.heightWp,
+      msg.expanded ? undefined : false
+    );
+  }
+
+  // replace layer
+  if (msg.type === "layer.replace") {
+    const layer = msg.layer
+    if (!layer) return
+
+    const newLayer = {
+      type: layer.type,
+      data: {
+        type: layer.data.type,
+        url: layer.data.url
+      },
+      ["3dtiles"]: {
+        color: {
+          expression: 'true ? color("blue") : color("pink")'
+          // expression: layer["3dtiles"]?.color?.expression
+        }
+      }
+    }
+    reearth.layers.delete(id)
+    reearth.layers.add(newLayer)
+    // reearth.layers.override(layer.id, {
+    //   ["3dtiles"]: {
+    //     color: {
+    //       expression: layer["3dtiles"]?.color?.expression
+    //     }
+    //   }
+    // })
+  }
 });
 
 reearth.on("click", (mousedata) => {
-reearth.ui.postMessage(
-{
-type: "mousedata",
-payload: mousedata,
-},
-"*"
-);
+  reearth.ui.postMessage(
+    {
+      type: "mousedata",
+      payload: mousedata,
+    },
+    "*"
+  );
 });
 
+reearth.on("select", (layerId) => {
+  if (!layerId) return
+  const layer = reearth.layers.findById(layerId)
+  console.log("layer---", layer);
+  if (!layer) return
+  reearth.ui.postMessage({
+    type: "select",
+    layer: cloneLayer(layer),
+    feature: reearth.layers.selectedFeature,
+  })
+})
+
 function send() {
-reearth.ui.postMessage({
-property: reearth.widget.property,
-});
+  reearth.ui.postMessage({
+    property: reearth.widget.property,
+  });
+}
+
+function highlightSelectedVoxel(layer) {
+
+}
+
+function cloneLayer(layer) {
+  const newLayer = {
+    id: layer.id,
+    type: layer.type,
+    data: {
+      type: layer.data?.type,
+      url: layer.data?.url
+    },
+    ["3dtiles"]: {
+      color: {
+        expression: layer["3dtiles"]?.color.expression
+      }
+    }
+  }
+  return newLayer
 }
