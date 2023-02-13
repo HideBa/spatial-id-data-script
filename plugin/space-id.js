@@ -1099,8 +1099,19 @@ reearth.ui.show(
           <div class="condition-item" id="condition-item-0">
             <div class="condition-item-fs">
               <div class="form-group">
-                <input type="text" class="form-input condition-item-attr" name="condition-item[0][0][attr]"
-                  id="condition-item-attr-0">
+                <!-- <input type="text" class="form-input condition-item-attr" name="condition-item[0][0][attr]"
+                  id="condition-item-attr-0"> -->
+                <select class="condition-item-attr operator" name="condition-item[0][0][operator]"
+                  id="condition-item-operator-0">
+                  <option value="pop_sex_code_1">男性</option>
+                  <option value="pop_sex_code_2">女性</option>
+                  <option value="pop_age00">男女合計、全年代</option>
+                  <option value="pop_age10">男女合計:10-19歳</option>
+                  <option value="pop_age20">男女合計:20-29歳</option>
+                  <option value="pop_age30">男女合計:30-39歳</option>
+                  <option value="pop_age40">男女合計:40-49歳</option>
+                  <option value="pop_age50">男女合計:50歳-</option>
+                </select>
               </div>
               <div class="form-group">
                 <select class="condition-item-operator operator" name="condition-item[0][0][operator]"
@@ -1541,7 +1552,7 @@ reearth.ui.show(
     const colorInput = document.getElementById("condition-item-selected-color-0").value
 
     return {
-      condition: conditionInput || "_height",
+      condition: conditionInput,
       operator: operatorInput || ">=",
       value: valueInput || 0,
       color: colorInput || "#ffffff"
@@ -1704,6 +1715,16 @@ reearth.ui.show(
     return geojson
   }
 
+  const populationMap = {
+    "pop_sex_code_1": "男性",
+    "pop_sex_code_2": "女性",
+    "pop_age00": "男女合計、全年代",
+    "pop_age10": "男女合計:10-19歳",
+    "pop_age20": "男女合計:20-29歳",
+    "pop_age30": "男女合計:30-39歳",
+    "pop_age40": "男女合計:40-49歳",
+    "pop_age50": "男女合計:50歳-"
+  }
 
 
   displayColorHex();
@@ -1794,15 +1815,16 @@ function cloneLayer(layer) {
   return newLayer
 }
 
+
 const id = reearth.layers.add({
   type: "simple",
   data: {
     type: "3dtiles",
-    url: "https://asset.cms.test.reearth.dev/assets/fb/2e49dd-4575-46ab-ae27-9177dc0fbb12/minato-population-z16/tileset.json",
+    url: "https://asset.cms.test.reearth.dev/assets/a8/4d461b-0dad-4d37-8df0-488e78226563/minato-z16-pop/tileset.json",
   },
   "3dtiles": {
     color: {
-      expression: "true ? color('#E8F1F2', 0.5) : color('white')"
+      // expression: '${pop_sex_code_1} > 1000?color("blue"):color("red")'
     }
   }
 });
