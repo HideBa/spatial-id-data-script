@@ -191,6 +191,8 @@ reearth.ui.show(
 
   .display {
     display: none;
+    flex-direction: column;
+    gap: 12px;
     padding: 12px 16px;
     width: 350px;
     background-color: #F5F5F5;
@@ -248,6 +250,11 @@ reearth.ui.show(
   #wrapper,
   .tabs {
     width: 374px;
+  }
+
+  #export-csv-btn,
+  #export-geojson-btn {
+    margin-top: 8px;
   }
 
   .tabs {
@@ -1072,10 +1079,13 @@ reearth.ui.show(
           </svg>
           csvデータを追加する</label>
       </div>
-      <div id="example-trigger">Trigger</div>
+      <!-- <div id="example-trigger">Trigger</div> -->
       <div class="show" id="show"></div>
       <button type="button" class="blue-btn" id="export-csv-btn">
         空間ID対応CSVをエクスポート
+      </button>
+      <button type="button" class="blue-btn" id="export-geojson-btn">
+        空間IDと結合したGeoJSONをエクスポート
       </button>
     </div>
     <div class="display" id="display-2">
@@ -1178,17 +1188,16 @@ reearth.ui.show(
   let currentFeature
   let plateauFetching = false
   let fudosanFetching = false
+  let currentSpace
   let spaceUrl
   window.addEventListener("message", function (e) {
     if (e.source !== parent) return;
-
-    // let allLayers = e.source.reearth.layers
-    // let tags;
 
     if (e.data.property) {
       property = e.data.property;
       spaceUrl = property?.default?.spaceUrl
     }
+
 
     if (e.data.type === "select") {
       const list = document.getElementById("show")
@@ -1203,7 +1212,8 @@ reearth.ui.show(
 
       const space = new SpatialIdRequest.Space(feature.properties.id)
 
-      showVoxelPropertiesOnInfobox(space) //show csv data
+      showVoxelProperties(currentFeature) //show voxel data
+      showAdditionalProperties(space)
 
       plateauFetching = true
       getPlateauData(space).then(d => {
@@ -1217,41 +1227,8 @@ reearth.ui.show(
         showData([["不動産情報", d]])
       }).finally(() => { fudosanFetching = false })
     }
-    // main()
 
   });
-
-  const fetchData = async (url) => {
-    const response = await fetch(url);
-    const data = await response.json();
-    return data;
-  }
-
-
-  function main() {
-    //get the url of the test data
-    if (spaceUrl) {
-      const list = document.getElementById("show")
-      $(".empty-content").remove();
-      //handle fetch data here
-      return fetchData(spaceUrl).then((data) => {
-        if (!data) return;
-        let results = Object.entries(data);
-        showData(results)
-      })
-      //show the data
-    }
-    else {
-      const list = document.getElementById("show")
-      while (list.firstChild) {
-        list.removeChild(list.firstChild);
-      }
-      const emptyContent = document.createElement("div");
-      emptyContent.className = "empty-content";
-      emptyContent.innerHTML = "Please upload a json file";
-      list.appendChild(emptyContent);
-    }
-  }
 
   function showData(data) {
     const list = document.getElementById('show');
@@ -1314,76 +1291,34 @@ reearth.ui.show(
         panelContentEle.appendChild(panelBtn)
         panelContentEle.appendChild(panelDetail)
         panel.appendChild(panelContentEle);
+        attachAccordionEvent(panelBtn)
       })
 
       rEle.appendChild(panel);
       list.prepend(rEle);
+      attachAccordionEvent(btn)
     })
-
-    var acc = document.getElementsByClassName("accordion");
-    var i;
-
-    for (i = 0; i < acc.length; i++) {
-      acc[i].addEventListener("click", function () {
-        this.classList.toggle("active");
-        var panel = this.nextElementSibling;
-        if (panel.style.display === "block") {
-          panel.style.display = "none";
-        } else {
-          panel.style.display = "block";
-        }
-        let activeClass = document.querySelector(".active");
-        if (!activeClass) {
-          expanded = false;
-        } else {
-          expanded = true;
-        }
-        updateIframeSize()
-      })
-    }
   }
 
-  // function handleShowTag(tags) {
-  //   const list = document.getElementById("show")
-  //   const el = document.createElement("div");
-  //   el.className = "element";
+  function attachAccordionEvent(elem) {
+    elem.addEventListener("click", function () {
+      this.classList.toggle("active");
+      const panel = this.nextElementSibling;
+      if (panel.style.display === "block") {
+        panel.style.display = "none";
+      } else {
+        panel.style.display = "block";
+      }
+      let activeClass = document.querySelector(".active");
+      if (!activeClass) {
+        expanded = false;
+      } else {
+        expanded = true;
+      }
+      updateIframeSize()
+    })
+  }
 
-  //   let btn = document.createElement("button");
-  //   btn.className = "accordion";
-  //   el.appendChild(btn);
-
-  //   let spanBtn = document.createElement("span");
-  //   spanBtn.className = "accordion-title";
-  //   if (tags && tags.length > 0) {
-  //     spanBtn.innerHTML = "list tags selected (" + tags.length + ")";
-  //   } else {
-  //     spanBtn.innerHTML = "selected has no tags"
-  //   }
-
-  //   let spanIcon = document.createElement("span");
-  //   spanIcon.className = "icon";
-  //   spanIcon.setAttribute("aria-hidden", "true");
-  //   btn.appendChild(spanBtn);
-  //   btn.appendChild(spanIcon);
-
-  //   let panel = document.createElement("div");
-  //   panel.className = "panel";
-  //   let table = document.createElement("table");
-  //   tags?.forEach(tag => {
-  //     let row = document.createElement("tr");
-  //     let col1 = document.createElement("td");
-  //     col1.innerHTML = tag.id;
-  //     let col2 = document.createElement("td");
-  //     col2.innerHTML = tag.label;
-  //     table.appendChild(row);
-  //     table.appendChild(col1);
-  //     table.appendChild(col2);
-  //     panel.appendChild(table);
-  //   })
-
-  //   el.appendChild(panel)
-  //   list.appendChild(el);
-  // }
   const tabButtons = document.querySelectorAll('.tab-button');
   const displays = document.querySelectorAll('.display');
 
@@ -1509,10 +1444,16 @@ reearth.ui.show(
     return new SpatialIdRequest.Space({ lng: lng, lat: lat, alt: alt }, 16)
   }
 
-  function showVoxelPropertiesOnInfobox(space) {
+  function showAdditionalProperties(space) {
     const spaceProperties = getPropertyBySpatialId(records, space.id)
     const propertiesEntries = Object.entries(spaceProperties)
     showData(propertiesEntries)
+  }
+
+  function showVoxelProperties(feature) {
+    if (!feature) return
+    const properties = feature.properties
+    showData([["Voxelのメタ情報", [properties]]])
   }
 
   function highlightSelectedVoxel(space) {
@@ -1575,6 +1516,7 @@ reearth.ui.show(
       });
     });
   }
+
   const frm = document.getElementById("data-form");
   const removeStyleBtn = document.getElementById("remove-style-btn");
   removeStyleBtn.addEventListener("click", function (e) {
@@ -1688,24 +1630,36 @@ reearth.ui.show(
     downloadObjectAsJson(styleData, "download");
   });
 
-  const trggerBtn = document.getElementById("example-trigger")
-  trggerBtn.addEventListener("click", function (e) {
-    e.preventDefault()
-    replaceLayer(currentLayer)
-  })
+  // const trggerBtn = document.getElementById("example-trigger")
+  // trggerBtn.addEventListener("click", function (e) {
+  //   e.preventDefault()
+  //   // replaceLayer(currentLayer)
+  //   joinUserDataWSpatialId(records)
+  // })
 
 
-  function csvStrToBlob(csvStr) {
-    return new Blob([csvStr], { type: "text/csv" })
+  function strToBlob(csvStr, type) {
+    return new Blob([csvStr], { type })
   }
 
   function downloadCSV() {
     const [filename, csvStr] = recordsToCSV()
-    const blob = csvStrToBlob(csvStr)
+    const blob = strToBlob(csvStr, "text/csv")
     const url = (window.URL || window.webkitURL).createObjectURL(blob)
     const download = document.createElement("a")
     download.href = url
     download.download = filename
+    download.click()
+      (window.URL || window.webkitURL).revokeObjectURL(url)
+  }
+
+  async function downloadGeoJSON() {
+    const jsonStr = JSON.stringify(await joinUserDataWSpatialId(records))
+    const blob = strToBlob(jsonStr, "application/json")
+    const url = (window.URL || window.webkitURL).createObjectURL(blob)
+    const download = document.createElement("a")
+    download.href = url
+    download.download = "joined"
     download.click()
       (window.URL || window.webkitURL).revokeObjectURL(url)
   }
@@ -1725,6 +1679,32 @@ reearth.ui.show(
     e.preventDefault();
     downloadCSV()
   })
+
+  const geojsonExportBtn = document.getElementById("export-geojson-btn")
+  geojsonExportBtn.addEventListener("click", async function (e) {
+    e.preventDefault()
+    await downloadGeoJSON()
+  })
+
+  async function joinUserDataWSpatialId(userData) {
+    const res = await fetch("https://asset.cms.test.reearth.dev/assets/8a/c97a31-84b6-4d2d-8886-467732ca67c7/data_population_16.geojson").catch(e => console.error(e))
+    const geojson = await res.json()
+    const userDataEntries = Object.entries(userData)
+    geojson.features.forEach(f => {
+      if (!f) return
+      const id = f.properties.id
+      let additionalProperties = {}
+      userDataEntries.forEach(d => {
+        const key = d[0]
+        const val = d[1].filter(r => r.id === id)
+        additionalProperties[key] = val
+      })
+      f.properties = { ...f.properties, ...additionalProperties }
+    })
+    return geojson
+  }
+
+
 
   displayColorHex();
   displayColorFromHex()
@@ -1776,15 +1756,7 @@ reearth.on("message", (msg) => {
   }
 });
 
-reearth.on("click", (mousedata) => {
-  reearth.ui.postMessage(
-    {
-      type: "mousedata",
-      payload: mousedata,
-    },
-    "*"
-  );
-});
+
 
 reearth.on("select", (layerId) => {
   if (!layerId) return
@@ -1804,9 +1776,6 @@ function send() {
   });
 }
 
-function highlightSelectedVoxel(layer) {
-
-}
 
 function cloneLayer(layer) {
   const newLayer = {
@@ -1824,3 +1793,18 @@ function cloneLayer(layer) {
   }
   return newLayer
 }
+
+const id = reearth.layers.add({
+  type: "simple",
+  data: {
+    type: "3dtiles",
+    url: "https://asset.cms.test.reearth.dev/assets/fb/2e49dd-4575-46ab-ae27-9177dc0fbb12/minato-population-z16/tileset.json",
+  },
+  "3dtiles": {
+    color: {
+      expression: "true ? color('#E8F1F2', 0.5) : color('white')"
+    }
+  }
+});
+
+reearth.camera.flyTo({ lng: 139.753985797606674, lat: 35.6306738560138, height: 1000 })
