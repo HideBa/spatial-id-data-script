@@ -1079,7 +1079,7 @@ reearth.ui.show(
           </svg>
           csvデータを追加する</label>
       </div>
-      <!-- <div id="example-trigger">Trigger</div> -->
+      <div id="example-trigger">Trigger</div>
       <div class="show" id="show"></div>
       <button type="button" class="blue-btn" id="export-csv-btn">
         空間ID対応CSVをエクスポート
@@ -1099,10 +1099,8 @@ reearth.ui.show(
           <div class="condition-item" id="condition-item-0">
             <div class="condition-item-fs">
               <div class="form-group">
-                <!-- <input type="text" class="form-input condition-item-attr" name="condition-item[0][0][attr]"
-                  id="condition-item-attr-0"> -->
                 <select class="condition-item-attr operator" name="condition-item[0][0][operator]"
-                  id="condition-item-operator-0">
+                  id="condition-item-attr-0">
                   <option value="pop_sex_code_1">男性</option>
                   <option value="pop_sex_code_2">女性</option>
                   <option value="pop_age00">男女合計、全年代</option>
@@ -1538,12 +1536,44 @@ reearth.ui.show(
     return false; // Prevent page refresh
   });
 
-  // Apply style function
   const applyBtn = document.getElementById("apply-style-btn");
   applyBtn.addEventListener("click", function (e) {
     e.preventDefault();
     console.log("apply btn clicked");
+    const conditions = buildStyleCondition()
+    const styleObj = buildStyleObj()
+    console.log("obj--", styleObj)
+    const styleJsonStr = styleObjToDataURL(styleObj)
+    console.log("style--", styleJsonStr)
+    parent.postMessage({ type: "layer.stylefile", styleJson: styleJsonStr, layerId: currentLayer.id }, "*");
   });
+
+  function buildStyleCondition() {
+    const colorCondition = getColorCondition()
+    return [colorCondition]
+  }
+
+  function styleObjToDataURL(obj) {
+    const dataUrl = "data:application/json;charset=utf8," + encodeURIComponent(JSON.stringify(obj))
+    return dataUrl
+  }
+
+  function buildStyleObj() {
+    const styleObj = { color: { conditions: [] } }
+    const colorCondition = getColorCondition()
+    styleObj.color.conditions.push(colorCondition)
+    const defaultCondition = ["true", "color('#E8F1F2', 0.6)"]
+    return styleObj
+  }
+
+  function getColorCondition() {
+    const attr = document.getElementById("condition-item-attr-0").value
+    const operator = document.getElementById("condition-item-operator-0").value
+    const value = document.getElementById("condition-item-value-0").value
+    const color = document.getElementById("condition-item-color-picker-0").value
+    if (!attr || !operator || !value || !color) return
+    return ["\${" + attr + "}" + " " + operator + " " + value, "color('" + color + "', 0.6)"]
+  }
 
   const getDataInput = () => {
     const conditionInput = document.getElementById("condition-item-attr-0").value
@@ -1641,12 +1671,12 @@ reearth.ui.show(
     downloadObjectAsJson(styleData, "download");
   });
 
-  // const trggerBtn = document.getElementById("example-trigger")
-  // trggerBtn.addEventListener("click", function (e) {
-  //   e.preventDefault()
-  //   // replaceLayer(currentLayer)
-  //   joinUserDataWSpatialId(records)
-  // })
+  const trggerBtn = document.getElementById("example-trigger")
+  trggerBtn.addEventListener("click", function (e) {
+    e.preventDefault()
+    // replaceLayer(currentLayer)
+    parent.postMessage({ type: "debug", hoge: "hoge", fuga: { foo: "foo", h: [["aaa", "bbb"], ["ccc", "ddd"]] } }, "*");
+  })
 
 
   function strToBlob(csvStr, type) {
@@ -1767,13 +1797,41 @@ reearth.on("message", (msg) => {
     }
     reearth.layers.delete(id)
     reearth.layers.add(newLayer)
-    // reearth.layers.override(layer.id, {
-    //   ["3dtiles"]: {
-    //     color: {
-    //       expression: layer["3dtiles"]?.color?.expression
-    //     }
-    //   }
-    // })
+  }
+
+  if (msg.type === "layer.style") {
+    // const conditions = conditionStrToArray(msg.conditions)
+    // console.log("cond---", conditions)
+    const layer = reearth.layers.findById(msg.layerId)
+    const conditions = msg.conditions
+    console.log("cond-----", conditions)
+    const newLayer = cloneLayer(layer)
+    const color = { ...newLayer["3dtiles"].color, conditions }
+    console.log("color--", color)
+    newLayer["3dtiles"].color = color
+    // newLayer["3dtiles"].color = { ...newLayer["3dtiles"].color, conditions: msg.conditions }
+    // console.log("l---", newLayer)
+    // reearth.layers.override(msg.layerId, { "3dtiles": { color: { conditions: msg.conditions } } })
+    console.log("layer ---", newLayer)
+    reearth.layers.delete(msg.layerId)
+    reearth.layers.add(newLayer)
+  }
+  if (msg.type === "layer.stylefile") {
+    console.log("style---", msg.styleJson)
+    reearth.layers.overrideProperty(msg.layerId, {
+      default: {
+        styleUrl: msg.styleJson
+      }
+    })
+  }
+
+  if (msg.type === 'debug') {
+    console.log("hoge---", msg.hoge)
+    console.log("fuga---", msg.fuga)
+    console.log("foo---", msg.fuga.foo)
+    console.log("key---", Object.keys(msg.fuga))
+    const arr = proxyToArray(msg.fuga.h)
+    console.log("arr---", arr)
   }
 });
 
@@ -1782,11 +1840,10 @@ reearth.on("message", (msg) => {
 reearth.on("select", (layerId) => {
   if (!layerId) return
   const layer = reearth.layers.findById(layerId)
-  console.log("layer---", layer);
   if (!layer) return
   reearth.ui.postMessage({
     type: "select",
-    layer: cloneLayer(layer),
+    layer: layer,
     feature: reearth.layers.selectedFeature,
   })
 })
@@ -1816,17 +1873,17 @@ function cloneLayer(layer) {
 }
 
 
-const id = reearth.layers.add({
-  type: "simple",
-  data: {
-    type: "3dtiles",
-    url: "https://asset.cms.test.reearth.dev/assets/a8/4d461b-0dad-4d37-8df0-488e78226563/minato-z16-pop/tileset.json",
-  },
-  "3dtiles": {
-    color: {
-      // expression: '${pop_sex_code_1} > 1000?color("blue"):color("red")'
-    }
-  }
-});
-
+// const id = reearth.layers.add({
+//   type: "simple",
+//   data: {
+//     type: "3dtiles",
+//     url: "https://asset.cms.test.reearth.dev/assets/a8/4d461b-0dad-4d37-8df0-488e78226563/minato-z16-pop/tileset.json",
+//   },
+//   "3dtiles": {
+//     color: {
+//       // expression: '${pop_sex_code_1} > 1000?color("blue"):color("red")'
+//     }
+//   }
+// });
+// console.log("id--", id)
 reearth.camera.flyTo({ lng: 139.753985797606674, lat: 35.6306738560138, height: 1000 })

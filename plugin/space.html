@@ -1077,7 +1077,7 @@
           </svg>
           csvデータを追加する</label>
       </div>
-      <!-- <div id="example-trigger">Trigger</div> -->
+      <div id="example-trigger">Trigger</div>
       <div class="show" id="show"></div>
       <button type="button" class="blue-btn" id="export-csv-btn">
         空間ID対応CSVをエクスポート
@@ -1097,8 +1097,17 @@
           <div class="condition-item" id="condition-item-0">
             <div class="condition-item-fs">
               <div class="form-group">
-                <input type="text" class="form-input condition-item-attr" name="condition-item[0][0][attr]"
+                <select class="condition-item-attr operator" name="condition-item[0][0][operator]"
                   id="condition-item-attr-0">
+                  <option value="pop_sex_code_1">男性</option>
+                  <option value="pop_sex_code_2">女性</option>
+                  <option value="pop_age00">男女合計、全年代</option>
+                  <option value="pop_age10">男女合計:10-19歳</option>
+                  <option value="pop_age20">男女合計:20-29歳</option>
+                  <option value="pop_age30">男女合計:30-39歳</option>
+                  <option value="pop_age40">男女合計:40-49歳</option>
+                  <option value="pop_age50">男女合計:50歳-</option>
+                </select>
               </div>
               <div class="form-group">
                 <select class="condition-item-operator operator" name="condition-item[0][0][operator]"
@@ -1525,12 +1534,44 @@
     return false; // Prevent page refresh
   });
 
-  // Apply style function
   const applyBtn = document.getElementById("apply-style-btn");
   applyBtn.addEventListener("click", function (e) {
     e.preventDefault();
     console.log("apply btn clicked");
+    const conditions = buildStyleCondition()
+    const styleObj = buildStyleObj()
+    console.log("obj--", styleObj)
+    const styleJsonStr = styleObjToDataURL(styleObj)
+    console.log("style--", styleJsonStr)
+    parent.postMessage({ type: "layer.stylefile", styleJson: styleJsonStr, layerId: currentLayer.id }, "*");
   });
+
+  function buildStyleCondition() {
+    const colorCondition = getColorCondition()
+    return [colorCondition]
+  }
+
+  function styleObjToDataURL(obj) {
+    const dataUrl = "data:application/json;charset=utf8," + encodeURIComponent(JSON.stringify(obj))
+    return dataUrl
+  }
+
+  function buildStyleObj() {
+    const styleObj = { color: { conditions: [] } }
+    const colorCondition = getColorCondition()
+    styleObj.color.conditions.push(colorCondition)
+    const defaultCondition = ["true", "color('#E8F1F2', 0.6)"]
+    return styleObj
+  }
+
+  function getColorCondition() {
+    const attr = document.getElementById("condition-item-attr-0").value
+    const operator = document.getElementById("condition-item-operator-0").value
+    const value = document.getElementById("condition-item-value-0").value
+    const color = document.getElementById("condition-item-color-picker-0").value
+    if (!attr || !operator || !value || !color) return
+    return ["\${" + attr + "}" + " " + operator + " " + value, "color('" + color + "', 0.6)"]
+  }
 
   const getDataInput = () => {
     const conditionInput = document.getElementById("condition-item-attr-0").value
@@ -1539,7 +1580,7 @@
     const colorInput = document.getElementById("condition-item-selected-color-0").value
 
     return {
-      condition: conditionInput || "_height",
+      condition: conditionInput,
       operator: operatorInput || ">=",
       value: valueInput || 0,
       color: colorInput || "#ffffff"
@@ -1628,12 +1669,12 @@
     downloadObjectAsJson(styleData, "download");
   });
 
-  // const trggerBtn = document.getElementById("example-trigger")
-  // trggerBtn.addEventListener("click", function (e) {
-  //   e.preventDefault()
-  //   // replaceLayer(currentLayer)
-  //   joinUserDataWSpatialId(records)
-  // })
+  const trggerBtn = document.getElementById("example-trigger")
+  trggerBtn.addEventListener("click", function (e) {
+    e.preventDefault()
+    // replaceLayer(currentLayer)
+    parent.postMessage({ type: "debug", hoge: "hoge", fuga: { foo: "foo", h: [["aaa", "bbb"], ["ccc", "ddd"]] } }, "*");
+  })
 
 
   function strToBlob(csvStr, type) {
@@ -1702,6 +1743,16 @@
     return geojson
   }
 
+  const populationMap = {
+    "pop_sex_code_1": "男性",
+    "pop_sex_code_2": "女性",
+    "pop_age00": "男女合計、全年代",
+    "pop_age10": "男女合計:10-19歳",
+    "pop_age20": "男女合計:20-29歳",
+    "pop_age30": "男女合計:30-39歳",
+    "pop_age40": "男女合計:40-49歳",
+    "pop_age50": "男女合計:50歳-"
+  }
 
 
   displayColorHex();
