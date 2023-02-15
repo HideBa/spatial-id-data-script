@@ -1077,7 +1077,6 @@
           </svg>
           csvデータを追加する</label>
       </div>
-      <div id="example-trigger">Trigger</div>
       <div class="show" id="show"></div>
       <button type="button" class="blue-btn" id="export-csv-btn">
         空間ID対応CSVをエクスポート
@@ -1196,10 +1195,10 @@
   let plateauFetching = false
   let fudosanFetching = false
   let currentSpace
+  let selectedStyle = { color: { conditions: [] } }
   let spaceUrl
   window.addEventListener("message", function (e) {
     if (e.source !== parent) return;
-
     if (e.data.property) {
       property = e.data.property;
       spaceUrl = property?.default?.spaceUrl
@@ -1207,35 +1206,51 @@
 
 
     if (e.data.type === "select") {
+
+      const feature = e.data.feature
+      if (!feature) {
+        currentFeature = undefined
+        return
+      }
+
+      currentLayer = e.data.layer
+      const oldFeature = currentFeature
+      currentFeature = feature
+
+      const space = new SpatialIdRequest.Space(feature.properties.id)
+
+      if (feature?.properties.id && (oldFeature?.properties?.id !== feature?.properties?.id)) {
+        highlightSelectedVoxel(space)
+      }
+
       const list = document.getElementById("show")
       while (list.firstChild) {
         list.removeChild(list.firstChild);
       }
-      const feature = e.data.feature
-      if (!feature) return
-      // const cloned = cloneLayer(e.data.layer)
-      currentLayer = e.data.layer
-      currentFeature = e.data.feature
+      showAllData(currentFeature, space)
 
-      const space = new SpatialIdRequest.Space(feature.properties.id)
-
-      showVoxelProperties(currentFeature) //show voxel data
-      showAdditionalProperties(space)
-
-      plateauFetching = true
-      getPlateauData(space).then(d => {
-        if (!d.length || plateauFetching) return
-        showData([["PLATEAU", d]])
-      }).finally(() => { plateauFetching = false })
-
-      fudosanFetching = true
-      getFudosanData(space).then(d => {
-        if (!d.length || fudosanFetching) return
-        showData([["不動産情報", d]])
-      }).finally(() => { fudosanFetching = false })
     }
 
   });
+
+  async function showAllData(feature, space) {
+    showVoxelProperties(feature) //show voxel data
+    showAdditionalProperties(space)
+
+    const plateauPromise = plateauFetching = true
+    getPlateauData(space).then(d => {
+      if (!d.length) return
+      showData([["PLATEAU", d]])
+      updateIframeSize()
+    }).finally(() => { plateauFetching = false })
+    fudosanFetching = true
+    const fudosanPromise = getFudosanData(space).then(d => {
+      if (!d.length) return
+      showData([["不動産情報", d]])
+      updateIframeSize()
+    }).finally(() => { fudosanFetching = false })
+    return Promise.all([plateauPromise, fudosanPromise]).catch(e => console.error(e))
+  }
 
   function showData(data) {
     const list = document.getElementById('show');
@@ -1463,9 +1478,7 @@
     showData([["Voxelのメタ情報", [properties]]])
   }
 
-  function highlightSelectedVoxel(space) {
 
-  }
 
   function replaceLayer(layer) { //pass new layer
     parent.postMessage({ type: "layer.replace", layer }, "*");
@@ -1488,7 +1501,6 @@
 
   // <!-- This function is used to update the iframe size. -->
   let expanded = false;
-
   function updateIframeSize() {
     let newWrapperElm = document.getElementById("wrapper");
     let heightWp = newWrapperElm.offsetHeight;
@@ -1531,37 +1543,45 @@
 
     //clear form
     frm.reset(); // Reset all form data
+    selectedStyle.color.conditions = []
+    applyStyle()
     return false; // Prevent page refresh
   });
 
+  function highlightSelectedVoxel(space) {
+    const highlightCond = ["\${id} === " + space.id, "color('#26b0dc', 0.6)"]
+    console.log("high cond---", highlightCond);
+    selectedStyle.color.conditions = highlightCond
+    console.log("cond---", selectedStyle);
+    applyStyle()
+  }
+
+  // --------------Apply style--------------
   const applyBtn = document.getElementById("apply-style-btn");
   applyBtn.addEventListener("click", function (e) {
     e.preventDefault();
-    console.log("apply btn clicked");
-    const conditions = buildStyleCondition()
-    const styleObj = buildStyleObj()
-    console.log("obj--", styleObj)
-    const styleJsonStr = styleObjToDataURL(styleObj)
-    console.log("style--", styleJsonStr)
-    parent.postMessage({ type: "layer.stylefile", styleJson: styleJsonStr, layerId: currentLayer.id }, "*");
+    applyStyle()
   });
 
+  function applyStyle() {
+    const conditions = buildStyleCondition()
+    console.log("cond2---", conditions);
+    const styleObj = { color: { conditions: conditions } }
+    console.log("obj--", styleObj)
+    const styleJsonStr = styleObjToDataURL(styleObj)
+    parent.postMessage({ type: "layer.stylefile", styleJson: styleJsonStr, layerId: currentLayer.id }, "*");
+  }
+
   function buildStyleCondition() {
-    const colorCondition = getColorCondition()
-    return [colorCondition]
+    const formColorCondition = getColorCondition()
+    const selectedColorCondition = selectedStyle.color.conditions
+    const defaultColorCondition = ["true", "color('#E8F1F2', 0.4)"]
+    return [formColorCondition, selectedColorCondition, defaultColorCondition].filter(v => !!v)
   }
 
   function styleObjToDataURL(obj) {
     const dataUrl = "data:application/json;charset=utf8," + encodeURIComponent(JSON.stringify(obj))
     return dataUrl
-  }
-
-  function buildStyleObj() {
-    const styleObj = { color: { conditions: [] } }
-    const colorCondition = getColorCondition()
-    styleObj.color.conditions.push(colorCondition)
-    const defaultCondition = ["true", "color('#E8F1F2', 0.6)"]
-    return styleObj
   }
 
   function getColorCondition() {
@@ -1570,113 +1590,10 @@
     const value = document.getElementById("condition-item-value-0").value
     const color = document.getElementById("condition-item-color-picker-0").value
     if (!attr || !operator || !value || !color) return
-    return ["\${" + attr + "}" + " " + operator + " " + value, "color('" + color + "', 0.6)"]
+    return ["\${" + attr + "}" + " " + operator + " " + value, "color('" + color + "', 0.5)"]
   }
 
-  const getDataInput = () => {
-    const conditionInput = document.getElementById("condition-item-attr-0").value
-    const operatorInput = document.getElementById("condition-item-operator-0").value
-    const valueInput = document.getElementById("condition-item-value-0").value
-    const colorInput = document.getElementById("condition-item-selected-color-0").value
-
-    return {
-      condition: conditionInput,
-      operator: operatorInput || ">=",
-      value: valueInput || 0,
-      color: colorInput || "#ffffff"
-    }
-  }
-  function isNumeric(n) {
-    return !isNaN(parseFloat(n)) && isFinite(n);
-  }
-
-  const handleDataJson = (obj) => {
-    //return styleData
-    if (obj.condition.includes(":") || obj.condition.includes("#") || obj.condition.includes("_")) {
-      obj.condition = "feature['" + obj.condition + "']"
-    }
-
-    if (!Object.values(obj)) {
-      return {
-        "show": "true",
-        "color": {
-          "conditions": [
-            [
-              "true",
-              "color('#FFFFFF')"
-            ]
-          ]
-        }
-      }
-    }
-    else {
-      if (isNumeric(obj.value)) {
-        return {
-          "show": "true",
-          "color": {
-            "conditions": [[
-              "$" +
-              "{" +
-              obj.condition +
-              "}" +
-              obj.operator +
-              "" +
-              obj.value,
-              "color('" + obj.color + "')",
-            ]]
-          }
-        }
-      } else {
-        return {
-          "show": "true",
-          "color": {
-            "conditions": [[
-              "$" +
-              "{" +
-              obj.condition +
-              "}" +
-              obj.operator + "'" +
-              "" +
-              obj.value + "'",
-              "color('" + obj.color + "')",
-            ]]
-          }
-        }
-      }
-
-    }
-  }
-
-  //download plugin input data as json file
-  function downloadObjectAsJson(exportObj, exportName) {
-    var dataStr =
-      "data:text/json;charset=utf-8," +
-      encodeURIComponent(JSON.stringify(exportObj));
-    var downloadAnchorNode = document.createElement("a");
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", exportName + ".json");
-    document.body.appendChild(downloadAnchorNode); // required for firefox
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-  }
-
-  const exportBtn = document.getElementById("export-style-btn");
-  exportBtn.addEventListener("click", function (event) {
-    event.preventDefault();
-    const data = getDataInput();
-    //download style file json
-    const styleData = handleDataJson(data)
-    downloadObjectAsJson(styleData, "download");
-  });
-
-  const trggerBtn = document.getElementById("example-trigger")
-  trggerBtn.addEventListener("click", function (e) {
-    e.preventDefault()
-    // replaceLayer(currentLayer)
-    parent.postMessage({ type: "debug", hoge: "hoge", fuga: { foo: "foo", h: [["aaa", "bbb"], ["ccc", "ddd"]] } }, "*");
-  })
-
-
+  // -------------handle CSV-------------
   function strToBlob(csvStr, type) {
     return new Blob([csvStr], { type })
   }
@@ -1692,16 +1609,6 @@
       (window.URL || window.webkitURL).revokeObjectURL(url)
   }
 
-  async function downloadGeoJSON() {
-    const jsonStr = JSON.stringify(await joinUserDataWSpatialId(records))
-    const blob = strToBlob(jsonStr, "application/json")
-    const url = (window.URL || window.webkitURL).createObjectURL(blob)
-    const download = document.createElement("a")
-    download.href = url
-    download.download = "joined"
-    download.click()
-      (window.URL || window.webkitURL).revokeObjectURL(url)
-  }
 
   function recordsToCSV() {
     const fileNames = Object.keys(records)
@@ -1719,6 +1626,17 @@
     downloadCSV()
   })
 
+  //-----handle geojson------
+  async function downloadGeoJSON() {
+    const jsonStr = JSON.stringify(await joinUserDataWSpatialId(records))
+    const blob = strToBlob(jsonStr, "application/json")
+    const url = (window.URL || window.webkitURL).createObjectURL(blob)
+    const download = document.createElement("a")
+    download.href = url
+    download.download = "joined"
+    download.click()
+      (window.URL || window.webkitURL).revokeObjectURL(url)
+  }
   const geojsonExportBtn = document.getElementById("export-geojson-btn")
   geojsonExportBtn.addEventListener("click", async function (e) {
     e.preventDefault()
@@ -1742,18 +1660,6 @@
     })
     return geojson
   }
-
-  const populationMap = {
-    "pop_sex_code_1": "男性",
-    "pop_sex_code_2": "女性",
-    "pop_age00": "男女合計、全年代",
-    "pop_age10": "男女合計:10-19歳",
-    "pop_age20": "男女合計:20-29歳",
-    "pop_age30": "男女合計:30-39歳",
-    "pop_age40": "男女合計:40-49歳",
-    "pop_age50": "男女合計:50歳-"
-  }
-
 
   displayColorHex();
   displayColorFromHex()
