@@ -1084,7 +1084,7 @@ reearth.ui.show(
         空間ID対応CSVをエクスポート
       </button>
       <button type="button" class="blue-btn" id="export-geojson-btn">
-        空間IDと結合したGeoJSONをエクスポート
+        空間ID対応GeoJSONをエクスポート
       </button>
     </div>
     <div class="display" id="display-2">
@@ -1223,6 +1223,7 @@ reearth.ui.show(
 
       if (feature?.properties.id && (oldFeature?.properties?.id !== feature?.properties?.id)) {
         highlightSelectedVoxel(space)
+        // highlightSelectedVoxel(space, "color('#26b0dc', 0.8)")
       }
 
       const list = document.getElementById("show")
@@ -1365,6 +1366,7 @@ reearth.ui.show(
           display.style.display = 'none';
         }
       });
+      updateIframeSize()
     });
   });
   // add active class to the first tab button by default
@@ -1404,12 +1406,24 @@ reearth.ui.show(
     return convertedRecords
   }
 
+  // function spatialIdnize(obj) {
+  //   if (!obj.hasOwnProperty("lat") || !obj.hasOwnProperty("lng")) return
+  //   const { lat, lng, alt, ...rest } = obj
+  //   const space = getSpatialIdByLatLngAlt(lat, lng, alt ?? 0)
+  //   return {
+  //     id: space.id,
+  //     ...rest
+  //   }
+  // }
   function spatialIdnize(obj) {
-    if (!obj.hasOwnProperty("lat") || !obj.hasOwnProperty("lng")) return
-    const { lat, lng, alt, ...rest } = obj
-    const space = getSpatialIdByLatLngAlt(lat, lng, alt ?? 0)
+    if (!obj.hasOwnProperty("緯度") || !obj.hasOwnProperty("経度")) return
+    const { 緯度, 経度, 標高, ...rest } = obj
+    const space = getSpatialIdByLatLngAlt(緯度, 経度, 標高 ?? 0)
     return {
       id: space.id,
+      緯度,
+      経度,
+      標高,
       ...rest
     }
   }
@@ -1426,11 +1440,17 @@ reearth.ui.show(
       delimiter: ","
     }, (err, rs) => {
       if (err) throw new Error("failed to process csv")
-      const convertedRecords = convertLatLng(rs)
-      const spatialIdRecords = spatialIdnizeList(convertedRecords ?? [])
+      // const convertedRecords = convertLatLng(rs)
+      // const spatialIdRecords = spatialIdnizeList(convertedRecords ?? [])
+      const spatialIdRecords = spatialIdnizeList(rs ?? [])
       records = spatialIdRecords
       callback?.(records)
     })
+    return records
+  }
+
+  function addCSVLayer(str) {
+    parent.postMessage({ type: 'layer.addCSV', csvStr: str }, '*')
   }
 
   let records = {} //複数CSVを見越してrecordsをさらにリストで格納 e.g. {hinansho: []}
@@ -1445,6 +1465,7 @@ reearth.ui.show(
       processCSV(text, (res) => {
         records[fileName] = res
       })
+      addCSVLayer(text)
       // The document.write method will overwrite the entire document, including the closing </body> and </html> tags, causing all elements on the page to be removed.
       // document.write(JSON.stringify(array));
     };
@@ -1480,11 +1501,6 @@ reearth.ui.show(
     showData([["Voxelのメタ情報", [properties]]])
   }
 
-
-
-  function replaceLayer(layer) { //pass new layer
-    parent.postMessage({ type: "layer.replace", layer }, "*");
-  }
 
   // space -> [{...props}]
   async function getPlateauData(space) {
@@ -1550,11 +1566,9 @@ reearth.ui.show(
     return false; // Prevent page refresh
   });
 
-  function highlightSelectedVoxel(space) {
-    const highlightCond = ["\${id} === " + space.id, "color('#26b0dc', 0.6)"]
-    console.log("high cond---", highlightCond);
+  function highlightSelectedVoxel(space, color) {
+    const highlightCond = ["\${id} === " + "'" + space.zfxyStr + "'", "color('#26b0dc', 0.8)"]
     selectedStyle.color.conditions = highlightCond
-    console.log("cond---", selectedStyle);
     applyStyle()
   }
 
@@ -1567,9 +1581,7 @@ reearth.ui.show(
 
   function applyStyle() {
     const conditions = buildStyleCondition()
-    console.log("cond2---", conditions);
     const styleObj = { color: { conditions: conditions } }
-    console.log("obj--", styleObj)
     const styleJsonStr = styleObjToDataURL(styleObj)
     parent.postMessage({ type: "layer.stylefile", styleJson: styleJsonStr, layerId: currentLayer.id }, "*");
   }
@@ -1596,8 +1608,8 @@ reearth.ui.show(
   }
 
   // -------------handle CSV-------------
-  function strToBlob(csvStr, type) {
-    return new Blob([csvStr], { type })
+  function strToBlob(str, type) {
+    return new Blob([str], { type })
   }
 
   function downloadCSV() {
@@ -1687,10 +1699,36 @@ reearth.on("message", (msg) => {
   }
 
   if (msg.type === "layer.stylefile") {
-    console.log("passed style---", msg.styleJson)
     reearth.layers.overrideProperty(msg.layerId, {
       default: {
         styleUrl: msg.styleJson
+      }
+    })
+  }
+
+  if (msg.type === "layer.add") {
+    reearth.layers.add({
+      type: "simple",
+      data: {
+        type: "csv",
+        value: msg.geojson
+      }
+    })
+  }
+  if (msg.type === "layer.addCSV") {
+    reearth.layers.add({
+      type: "simple",
+      data: {
+        type: "csv",
+        value: msg.csvStr,
+        csv: {
+          latColumn: "経度",
+          lngColumn: "緯度",
+          noHeader: false,
+        }
+      },
+      marker: {
+        color: "color('#E8F1F2', 0.4)",
       }
     })
   }
@@ -1728,7 +1766,7 @@ function send() {
 //   type: "simple",
 //   data: {
 //     type: "3dtiles",
-//     url: "https://asset.cms.test.reearth.dev/assets/a8/4d461b-0dad-4d37-8df0-488e78226563/minato-z16-pop/tileset.json",
+//     url: "https://asset.cms.test.reearth.dev/assets/a0/cc7cae-de41-4352-aab4-02d95b558740/minato-xyz-16/tileset.json",
 //   },
 //   "3dtiles": {
 //     color: {
@@ -1736,5 +1774,4 @@ function send() {
 //     }
 //   }
 // });
-// console.log("id--", id)
 reearth.camera.flyTo({ lng: 139.753985797606674, lat: 35.6306738560138, height: 1000 })

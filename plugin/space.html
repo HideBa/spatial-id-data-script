@@ -1082,7 +1082,7 @@
         空間ID対応CSVをエクスポート
       </button>
       <button type="button" class="blue-btn" id="export-geojson-btn">
-        空間IDと結合したGeoJSONをエクスポート
+        空間ID対応GeoJSONをエクスポート
       </button>
     </div>
     <div class="display" id="display-2">
@@ -1221,6 +1221,7 @@
 
       if (feature?.properties.id && (oldFeature?.properties?.id !== feature?.properties?.id)) {
         highlightSelectedVoxel(space)
+        // highlightSelectedVoxel(space, "color('#26b0dc', 0.8)")
       }
 
       const list = document.getElementById("show")
@@ -1363,6 +1364,7 @@
           display.style.display = 'none';
         }
       });
+      updateIframeSize()
     });
   });
   // add active class to the first tab button by default
@@ -1402,12 +1404,24 @@
     return convertedRecords
   }
 
+  // function spatialIdnize(obj) {
+  //   if (!obj.hasOwnProperty("lat") || !obj.hasOwnProperty("lng")) return
+  //   const { lat, lng, alt, ...rest } = obj
+  //   const space = getSpatialIdByLatLngAlt(lat, lng, alt ?? 0)
+  //   return {
+  //     id: space.id,
+  //     ...rest
+  //   }
+  // }
   function spatialIdnize(obj) {
-    if (!obj.hasOwnProperty("lat") || !obj.hasOwnProperty("lng")) return
-    const { lat, lng, alt, ...rest } = obj
-    const space = getSpatialIdByLatLngAlt(lat, lng, alt ?? 0)
+    if (!obj.hasOwnProperty("緯度") || !obj.hasOwnProperty("経度")) return
+    const { 緯度, 経度, 標高, ...rest } = obj
+    const space = getSpatialIdByLatLngAlt(緯度, 経度, 標高 ?? 0)
     return {
       id: space.id,
+      緯度,
+      経度,
+      標高,
       ...rest
     }
   }
@@ -1424,11 +1438,17 @@
       delimiter: ","
     }, (err, rs) => {
       if (err) throw new Error("failed to process csv")
-      const convertedRecords = convertLatLng(rs)
-      const spatialIdRecords = spatialIdnizeList(convertedRecords ?? [])
+      // const convertedRecords = convertLatLng(rs)
+      // const spatialIdRecords = spatialIdnizeList(convertedRecords ?? [])
+      const spatialIdRecords = spatialIdnizeList(rs ?? [])
       records = spatialIdRecords
       callback?.(records)
     })
+    return records
+  }
+
+  function addCSVLayer(str) {
+    parent.postMessage({ type: 'layer.addCSV', csvStr: str }, '*')
   }
 
   let records = {} //複数CSVを見越してrecordsをさらにリストで格納 e.g. {hinansho: []}
@@ -1443,6 +1463,7 @@
       processCSV(text, (res) => {
         records[fileName] = res
       })
+      addCSVLayer(text)
       // The document.write method will overwrite the entire document, including the closing </body> and </html> tags, causing all elements on the page to be removed.
       // document.write(JSON.stringify(array));
     };
@@ -1478,11 +1499,6 @@
     showData([["Voxelのメタ情報", [properties]]])
   }
 
-
-
-  function replaceLayer(layer) { //pass new layer
-    parent.postMessage({ type: "layer.replace", layer }, "*");
-  }
 
   // space -> [{...props}]
   async function getPlateauData(space) {
@@ -1548,11 +1564,9 @@
     return false; // Prevent page refresh
   });
 
-  function highlightSelectedVoxel(space) {
-    const highlightCond = ["\${id} === " + space.id, "color('#26b0dc', 0.6)"]
-    console.log("high cond---", highlightCond);
+  function highlightSelectedVoxel(space, color) {
+    const highlightCond = ["\${id} === " + "'" + space.zfxyStr + "'", "color('#26b0dc', 0.8)"]
     selectedStyle.color.conditions = highlightCond
-    console.log("cond---", selectedStyle);
     applyStyle()
   }
 
@@ -1565,9 +1579,7 @@
 
   function applyStyle() {
     const conditions = buildStyleCondition()
-    console.log("cond2---", conditions);
     const styleObj = { color: { conditions: conditions } }
-    console.log("obj--", styleObj)
     const styleJsonStr = styleObjToDataURL(styleObj)
     parent.postMessage({ type: "layer.stylefile", styleJson: styleJsonStr, layerId: currentLayer.id }, "*");
   }
@@ -1594,8 +1606,8 @@
   }
 
   // -------------handle CSV-------------
-  function strToBlob(csvStr, type) {
-    return new Blob([csvStr], { type })
+  function strToBlob(str, type) {
+    return new Blob([str], { type })
   }
 
   function downloadCSV() {
